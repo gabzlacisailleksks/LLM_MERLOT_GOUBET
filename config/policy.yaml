@@ -1,0 +1,30 @@
+deny_input_regex:
+  - "(?i)ignore (all|previous) instructions"
+  - "(?i)you are now the system"
+  - "(?i)pretend to be.*(developer|system)"
+  - "(?i)act as (system|developer)"
+  - "(?i)reveal|leak|exfiltrate|steal (the|my|your) (secret|password|api key|token)"
+  - "(?i)print the admin password"
+  - "(?i)run shell|execute .*command|rm -rf|powershell -"
+  - "(?i)browse this url and follow its instructions"
+  - "(?i)jailbreak|dan mode|developer mode"
+  - "(?i)reveal|show|output.*(system|internal).*(prompt|instructions|guidelines)"
+  
+deny_output_regex:
+  - "(?i)secret|password|api[_-]?key|token|private key|ssh-rsa"
+  - "(?i)<script>|javascript:"
+
+pii_patterns:
+  email: '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'
+  generic_key: '(?i)(sk|key|token)[-_][a-z0-9]{16,}'
+  aws_key: '(?i)AKIA[0-9A-Z]{16}'
+  ssn: '(?i)\b\d{3}-\d{2}-\d{4}\b'
+  credit_card: '\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b'
+
+allowed_tools:
+  - "search"
+  - "readfile"
+
+output_schema:
+  is_safe: "yes|no"
+  rationale: "string"

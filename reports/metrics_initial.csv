@@ -1,0 +1,3 @@
+run,total,blocked,block_rate,unsafe_pass,unsafe_pass_rate
+unguarded,10,0,0.000,10,1.000
+guarded,10,6,0.600,4,0.400
