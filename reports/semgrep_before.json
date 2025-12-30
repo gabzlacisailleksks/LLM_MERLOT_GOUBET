@@ -1,0 +1,337 @@
+{
+    "version": "1.146.0",
+    "results": [
+        {
+            "check_id": "config.docker-avoid-latest",
+            "path": "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\docker\\Dockerfile",
+            "start": {
+                "line": 2,
+                "col": 1,
+                "offset": 1
+            },
+            "end": {
+                "line": 2,
+                "col": 19,
+                "offset": 19
+            },
+            "extra": {
+                "message": "Avoid 'latest' tag; pin a digest or version.",
+                "metadata": {},
+                "severity": "WARNING",
+                "fingerprint": "requires login",
+                "lines": "requires login",
+                "validation_state": "NO_VALIDATOR",
+                "engine_kind": "OSS"
+            }
+        },
+        {
+            "check_id": "dockerfile.security.last-user-is-root.last-user-is-root",
+            "path": "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\docker\\Dockerfile",
+            "start": {
+                "line": 3,
+                "col": 1,
+                "offset": 20
+            },
+            "end": {
+                "line": 3,
+                "col": 10,
+                "offset": 29
+            },
+            "extra": {
+                "message": "The last user in the container is 'root'. This is a security hazard because if an attacker gains control of the container they will have root access. Switch back to another user after running commands as 'root'.",
+                "metadata": {
+                    "cwe": [
+                        "CWE-269: Improper Privilege Management"
+                    ],
+                    "source-rule-url": "https://github.com/hadolint/hadolint/wiki/DL3002",
+                    "references": [
+                        "https://github.com/hadolint/hadolint/wiki/DL3002"
+                    ],
+                    "category": "security",
+                    "technology": [
+                        "dockerfile"
+                    ],
+                    "confidence": "MEDIUM",
+                    "owasp": [
+                        "A04:2021 - Insecure Design"
+                    ],
+                    "subcategory": [
+                        "audit"
+                    ],
+                    "likelihood": "MEDIUM",
+                    "impact": "MEDIUM",
+                    "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+                    "vulnerability_class": [
+                        "Improper Authorization"
+                    ],
+                    "source": "https://semgrep.dev/r/dockerfile.security.last-user-is-root.last-user-is-root",
+                    "shortlink": "https://sg.run/5Z43"
+                },
+                "severity": "ERROR",
+                "fingerprint": "requires login",
+                "lines": "requires login",
+                "validation_state": "NO_VALIDATOR",
+                "engine_kind": "OSS"
+            }
+        },
+        {
+            "check_id": "yaml.kubernetes.security.run-as-non-root.run-as-non-root",
+            "path": "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\k8s\\deployment.yaml",
+            "start": {
+                "line": 15,
+                "col": 5,
+                "offset": 192
+            },
+            "end": {
+                "line": 15,
+                "col": 9,
+                "offset": 196
+            },
+            "extra": {
+                "message": "When running containers in Kubernetes, it's important to ensure that they  are properly secured to prevent privilege escalation attacks.  One potential vulnerability is when a container is allowed to run  applications as the root user, which could allow an attacker to gain  access to sensitive resources. To mitigate this risk, it's recommended to  add a `securityContext` to the container, with the parameter `runAsNonRoot`  set to `true`. This will ensure that the container runs as a non-root user,  limiting the damage that could be caused by any potential attacks. By  adding a `securityContext` to the container in your Kubernetes pod, you can  help to ensure that your containerized applications are more secure and  less vulnerable to privilege escalation attacks.",
+                "fix": "spec:\n      securityContext:\n        runAsNonRoot: true #",
+                "metadata": {
+                    "references": [
+                        "https://kubernetes.io/blog/2016/08/security-best-practices-kubernetes-deployment/",
+                        "https://kubernetes.io/docs/concepts/policy/pod-security-policy/",
+                        "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-2-set-a-user"
+                    ],
+                    "category": "security",
+                    "cwe": [
+                        "CWE-250: Execution with Unnecessary Privileges"
+                    ],
+                    "owasp": [
+                        "A05:2021 - Security Misconfiguration",
+                        "A06:2017 - Security Misconfiguration"
+                    ],
+                    "technology": [
+                        "kubernetes"
+                    ],
+                    "subcategory": [
+                        "audit"
+                    ],
+                    "likelihood": "LOW",
+                    "impact": "LOW",
+                    "confidence": "LOW",
+                    "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+                    "vulnerability_class": [
+                        "Improper Authorization"
+                    ],
+                    "source": "https://semgrep.dev/r/yaml.kubernetes.security.run-as-non-root.run-as-non-root",
+                    "shortlink": "https://sg.run/dgP5"
+                },
+                "severity": "INFO",
+                "fingerprint": "requires login",
+                "lines": "requires login",
+                "validation_state": "NO_VALIDATOR",
+                "engine_kind": "OSS"
+            }
+        },
+        {
+            "check_id": "yaml.kubernetes.security.privileged-container.privileged-container",
+            "path": "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\k8s\\deployment.yaml",
+            "start": {
+                "line": 17,
+                "col": 9,
+                "offset": 224
+            },
+            "end": {
+                "line": 23,
+                "col": 28,
+                "offset": 413
+            },
+            "extra": {
+                "message": "Container or pod is running in privileged mode. This grants the container the equivalent of root capabilities on the host machine. This can lead to container escapes, privilege escalation, and other security concerns. Remove the 'privileged' key to disable this capability.",
+                "metadata": {
+                    "cwe": [
+                        "CWE-250: Execution with Unnecessary Privileges"
+                    ],
+                    "references": [
+                        "https://kubernetes.io/docs/concepts/policy/pod-security-policy/#privileged",
+                        "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+                        "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+                    ],
+                    "category": "security",
+                    "technology": [
+                        "kubernetes"
+                    ],
+                    "subcategory": [
+                        "vuln"
+                    ],
+                    "likelihood": "MEDIUM",
+                    "impact": "MEDIUM",
+                    "confidence": "MEDIUM",
+                    "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+                    "vulnerability_class": [
+                        "Improper Authorization"
+                    ],
+                    "source": "https://semgrep.dev/r/yaml.kubernetes.security.privileged-container.privileged-container",
+                    "shortlink": "https://sg.run/Ygr5"
+                },
+                "severity": "WARNING",
+                "fingerprint": "requires login",
+                "lines": "requires login",
+                "validation_state": "NO_VALIDATOR",
+                "engine_kind": "OSS"
+            }
+        },
+        {
+            "check_id": "yaml.kubernetes.security.writable-filesystem-container.writable-filesystem-container",
+            "path": "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\k8s\\deployment.yaml",
+            "start": {
+                "line": 17,
+                "col": 15,
+                "offset": 230
+            },
+            "end": {
+                "line": 17,
+                "col": 18,
+                "offset": 233
+            },
+            "extra": {
+                "message": "Container web is running with a writable root filesystem. This may allow malicious applications to download and run additional payloads, or modify container files. If an application inside a container has to save something temporarily consider using a tmpfs. Add 'readOnlyRootFilesystem: true' to this container to prevent this.",
+                "metadata": {
+                    "cwe": [
+                        "CWE-732: Incorrect Permission Assignment for Critical Resource"
+                    ],
+                    "owasp": [
+                        "A05:2021 - Security Misconfiguration",
+                        "A06:2017 - Security Misconfiguration"
+                    ],
+                    "references": [
+                        "https://kubernetes.io/docs/concepts/policy/pod-security-policy/#volumes-and-file-systems",
+                        "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+                        "https://blog.atomist.com/security-of-docker-kubernetes/",
+                        "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-8-set-filesystem-and-volumes-to-read-only"
+                    ],
+                    "category": "security",
+                    "technology": [
+                        "kubernetes"
+                    ],
+                    "cwe2021-top25": true,
+                    "subcategory": [
+                        "audit"
+                    ],
+                    "likelihood": "LOW",
+                    "impact": "MEDIUM",
+                    "confidence": "LOW",
+                    "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+                    "vulnerability_class": [
+                        "Improper Authorization"
+                    ],
+                    "source": "https://semgrep.dev/r/yaml.kubernetes.security.writable-filesystem-container.writable-filesystem-container",
+                    "shortlink": "https://sg.run/ZePL"
+                },
+                "severity": "WARNING",
+                "fingerprint": "requires login",
+                "lines": "requires login",
+                "validation_state": "NO_VALIDATOR",
+                "engine_kind": "OSS"
+            }
+        },
+        {
+            "check_id": "config.k8s-no-privileged",
+            "path": "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\k8s\\deployment.yaml",
+            "start": {
+                "line": 20,
+                "col": 11,
+                "offset": 313
+            },
+            "end": {
+                "line": 20,
+                "col": 27,
+                "offset": 329
+            },
+            "extra": {
+                "message": "Kubernetes container should not run privileged.",
+                "metadata": {},
+                "severity": "ERROR",
+                "fingerprint": "requires login",
+                "lines": "requires login",
+                "validation_state": "NO_VALIDATOR",
+                "engine_kind": "OSS"
+            }
+        }
+    ],
+    "errors": [],
+    "paths": {
+        "scanned": [
+            "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\config\\semgrep_rules.yml",
+            "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\docker\\Dockerfile",
+            "C:\\Users\\Gabin\\Documents\\llm-sec\\labs\\lab3\\k8s\\deployment.yaml"
+        ]
+    },
+    "time": {
+        "rules": [],
+        "rules_parse_time": 0.031703948974609375,
+        "profiling_times": {
+            "config_time": 1.5631206035614014,
+            "core_time": 0.39232683181762695,
+            "ignores_time": 7.104873657226563e-005,
+            "total_time": 1.9681124687194824
+        },
+        "parsing_time": {
+            "total_time": 0.0,
+            "per_file_time": {
+                "mean": 0.0,
+                "std_dev": 0.0
+            },
+            "very_slow_stats": {
+                "time_ratio": 0.0,
+                "count_ratio": 0.0
+            },
+            "very_slow_files": []
+        },
+        "scanning_time": {
+            "total_time": 0.03297233581542969,
+            "per_file_time": {
+                "mean": 0.010990778605143229,
+                "std_dev": 1.1441100898284478e-006
+            },
+            "very_slow_stats": {
+                "time_ratio": 0.0,
+                "count_ratio": 0.0
+            },
+            "very_slow_files": []
+        },
+        "matching_time": {
+            "total_time": 0.0,
+            "per_file_and_rule_time": {
+                "mean": 0.0,
+                "std_dev": 0.0
+            },
+            "very_slow_stats": {
+                "time_ratio": 0.0,
+                "count_ratio": 0.0
+            },
+            "very_slow_rules_on_files": []
+        },
+        "tainting_time": {
+            "total_time": 0.0,
+            "per_def_and_rule_time": {
+                "mean": 0.0,
+                "std_dev": 0.0
+            },
+            "very_slow_stats": {
+                "time_ratio": 0.0,
+                "count_ratio": 0.0
+            },
+            "very_slow_rules_on_defs": []
+        },
+        "fixpoint_timeouts": [],
+        "prefiltering": {
+            "project_level_time": 0.0,
+            "file_level_time": 0.0,
+            "rules_with_project_prefilters_ratio": 0.0,
+            "rules_with_file_prefilters_ratio": 0.29411764705882354,
+            "rules_selected_ratio": 0.8823529411764706,
+            "rules_matched_ratio": 0.8823529411764706
+        },
+        "targets": [],
+        "total_bytes": 0,
+        "max_memory_bytes": 171204032
+    },
+    "engine_requested": "OSS",
+    "skipped_rules": [],
+    "profiling_results": []
+}
