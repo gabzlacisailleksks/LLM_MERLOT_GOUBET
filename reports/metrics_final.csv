@@ -1,3 +1,0 @@
-run,total,blocked,block_rate,unsafe_pass,unsafe_pass_rate
-unguarded,10,0,0.000,10,1.000
-guarded,10,7,0.700,3,0.300

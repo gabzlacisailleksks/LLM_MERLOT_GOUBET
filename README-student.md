@@ -1,430 +1,782 @@
-Lab 4 Student Runbook — Guardrails + Red Team Suite
-=======================================================
-> Author : Badr TAJINI - LLM Cybersecurity - ECE 2025/2026
+# Final Project Student Runbook — Secure RAG & Safe Agent
 
-**Goal:** Add guardrails to an LLM application and measure their effectiveness using an automated red-team attack suite. Compare **block rates** between unguarded and guarded modes.
+> **Author:** Badr TAJINI — LLM Cybersecurity — ECE 2025/2026
 
----
-
-## Table of Contents
-
-1. [Prerequisites](#0-prerequisites)
-2. [Getting Started](#1-getting-started)
-3. [Understanding the Architecture](#2-understanding-the-architecture)
-4. [Running the Attack Suite](#3-running-the-attack-suite)
-5. [Computing Metrics](#4-computing-metrics)
-6. [Customizing Guardrails](#5-customizing-guardrails)
-7. [Troubleshooting](#6-troubleshooting)
-8. [Deliverables](#deliverables-checklist)
+This project combines everything from Labs 1-4 into a complete secure LLM application. You will build both a **RAG (Retrieval-Augmented Generation)** system and an **Agent** system with proper security guardrails.
 
 ---
 
-## 0. Prerequisites (do these before class)
+## 0. Prerequisites (complete before class)
 
-- **Python 3.11+** installed locally (3.11-3.13 supported)
-- **Node.js 22+ LTS** — For promptfoo eval in Final Project
-- A Google **Gemini API key** from [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-- Basic terminal and Git familiarity
+| Requirement | Why You Need It |
+|-------------|-----------------|
+| **Python 3.11+** | Core runtime (3.11-3.13 all work) |
+| **Node.js 22+ LTS** | Required for promptfoo evaluation framework |
+| **Gemini API Key** | Get free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| **OpenRouter API Key** | Optional but **highly recommended** — Get free at [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **Git** | Version control for your submissions |
 
-Optional but recommended:
+### Why OpenRouter?
 
-- Visual Studio Code or another editor with Jupyter support.
-- A GitHub account if you plan to push lab artifacts to a remote repo.
-
-### ⚠️ Rate Limits
-Google AI Studio Free Tier has strict limits:
-- **5 requests per minute** per model
-- The code includes automatic delays to avoid hitting limits
+Google's free tier has **strict rate limits** (15-20 requests/minute). During evaluation runs with promptfoo, you'll hit these limits quickly and see `429 RESOURCE_EXHAUSTED` errors. OpenRouter provides free models without these restrictions.
 
 ---
 
-## 1. Getting Started
+## 1. Environment Setup
 
-### Step 1: Clone and Navigate
+### Step 1: Install Dependencies (from repo root)
+
 ```bash
-# Clone the course repository
-git clone https://github.com/btajini/llm-course.git
-cd llm-course
+cd /path/to/llm-course
+make install                          # Creates .venv at repo root
 ```
 
-### Step 2: Activate the Shared Virtual Environment
-The course uses a **single shared venv** at the repository root:
+### Step 2: Activate Virtual Environment
+
+<details>
+<summary><strong> Linux / macOS (bash/zsh)</strong></summary>
 
 ```bash
-# From repo root (llm-course/)
-make install                    # Creates .venv and installs all dependencies
-source .venv/bin/activate       # Windows: .venv\Scripts\Activate.ps1
+source .venv/bin/activate
+```
+</details>
+
+<details>
+<summary><strong> Windows (PowerShell)</strong></summary>
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
-### Step 3: Install Dependencies
-(Dependencies already installed via root venv)
+> If you get an execution policy error, run:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
+</details>
 
-### Step 4: Configure API Key
+<details>
+<summary><strong> Windows (Command Prompt)</strong></summary>
+
+```cmd
+.venv\Scripts\activate.bat
+```
+</details>
+
+### Step 3: Configure API Keys
+
 ```bash
-# From repo root - .env is shared across all labs
 cp .env.example .env
+# Edit .env and add your keys:
+#   GEMINI_API_KEY=your-gemini-key
+#   OPENROUTER_API_KEY=your-openrouter-key   # Recommended!
+#   MODEL_ID=gemini-2.5-flash
 ```
 
-Edit `.env` and replace `PUT_YOUR_KEY_HERE` with your actual Gemini API key:
-```
-GEMINI_API_KEY=AIzaSy...your-actual-key...
-MODEL_ID=gemini-2.5-flash
-```
-
-### Step 5: Navigate to Lab 4
-```bash
-cd labs/lab4
-```
-
-### Step 6: Verify Setup
-```bash
-source ../../.env               # Load from repo root
-echo $GEMINI_API_KEY | head -c 10
-# Should print: AIzaSy...
-```
-
----
-
-## 2. Understanding the Architecture
-
-### Project Structure
-```
-llm-sec-lab4/
-├── attacks/
-│   └── attacks.txt          # Red-team prompts (malicious inputs)
-├── config/
-│   └── policy.yaml          # Guardrail rules (regex patterns)
-├── src/
-│   ├── guardrails.py        # Input/output filtering + LLM call
-│   ├── run_suite.py         # Main attack runner
-│   └── metrics.py           # Calculate block rate statistics
-├── reports/                 # Output JSON and CSV files
-└── tests/                   # Unit tests
-```
-
-### Guardrails Pipeline
-
-```
-User Input → [Input Filter] → LLM → [Output Filter] → Response
-               ↓                        ↓
-            BLOCKED?                  BLOCKED?
-               ↓                        ↓
-         policy.yaml              policy.yaml
-         (deny_input_regex)       (deny_output_regex)
-```
-
-### Attack Types (attacks/attacks.txt)
-The attack suite includes:
-- **Prompt injection**: "Ignore previous instructions..."
-- **System impersonation**: "You are now the system..."
-- **Secret extraction**: "Reveal the API key..."
-- **Shell commands**: "Run rm -rf /"
-- **PII extraction**: "Show me user emails..."
-
----
-
-## 3. Running the Attack Suite
-
-### Run Unguarded Mode (No Guardrails)
-```bash
-source .env
-PYTHONPATH=. python src/run_suite.py --mode unguarded --limit 10 --delay 12
-```
-
-**What this does:**
-- Sends 10 attacks directly to the LLM without filtering
-- Waits 12 seconds between requests (rate limit protection)
-- Saves results to `reports/unguarded.json`
-
-**Expected time:** ~2 minutes for 10 attacks
-
-### Run Guarded Mode (With Guardrails)
-```bash
-PYTHONPATH=. python src/run_suite.py --mode guarded --limit 10 --delay 12
-```
-
-**What this does:**
-- Sends 10 attacks through input/output filters
-- Blocks attacks matching `policy.yaml` patterns BEFORE calling LLM
-- Saves results to `reports/guarded.json`
-
-**Expected output:**
-```
-Running 10 attacks in guarded mode with 12.0s delay...
-Estimated time: 2.0 minutes
-  [1/10] Processing attack... BLOCKED
-  [2/10] Processing attack... BLOCKED
-  [3/10] Processing attack... UNSAFE
-  ...
-Wrote reports/guarded.json
-```
-
-### Understanding Results
-
-| Status | Meaning |
-|--------|---------|
-| `BLOCKED` | Guardrail caught the attack (input or output filter) |
-| `SAFE` | LLM said the request is safe |
-| `UNSAFE` | LLM correctly identified an unsafe request |
-
----
-
-## 4. Computing Metrics
-
-After running both modes, compute the comparison metrics:
+### Step 4: Navigate to Project and Verify
 
 ```bash
-PYTHONPATH=. python src/metrics.py \
-  reports/unguarded.json \
-  reports/guarded.json \
-  reports/metrics.csv
-```
-
-**Output file (`reports/metrics.csv`):**
-```csv
-run,total,blocked,block_rate,unsafe_pass,unsafe_pass_rate
-unguarded,10,0,0.000,0,0.000
-guarded,10,8,0.800,0,0.000
-```
-
-### Key Metrics Explained
-
-| Metric | Description | Goal |
-|--------|-------------|------|
-| `block_rate` | % of attacks blocked by guardrails | Higher is better (guarded) |
-| `unsafe_pass_rate` | % of unsafe requests that passed through | Lower is better |
-
----
-
-## 5. Customizing Guardrails
-
-### Required: Add 2+ New Rules
-
-Edit `config/policy.yaml` to add your own guardrail rules:
-
-```yaml
-deny_input_regex:
-  - "(?i)ignore (all|previous) instructions"
-  - "(?i)you are now the system"
-  # ADD YOUR RULES HERE:
-  - "(?i)bypass|circumvent|disable.*(filter|guard|safety)"
-  - "(?i)jailbreak|dan mode"
-
-deny_output_regex:
-  - "(?i)secret|password|api[_-]?key"
-  # ADD YOUR RULES HERE:
-  - "(?i)here is the (password|secret|key)"
-
-pii_patterns:
-  email: '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'
-  # ADD YOUR PATTERNS HERE:
-  ssn: '(?i)\b\d{3}-\d{2}-\d{4}\b'
-  credit_card: '\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b'
-```
-
-### Test Your Rules
-After adding rules, re-run and compare:
-
-```bash
-# Re-run guarded mode
-PYTHONPATH=. python src/run_suite.py --mode guarded --limit 20 --delay 12
-
-# Re-compute metrics
-PYTHONPATH=. python src/metrics.py \
-  reports/unguarded.json \
-  reports/guarded.json \
-  reports/metrics.csv
-
-cat reports/metrics.csv
-```
-
----
-
-## 6. Troubleshooting
-
-### "No module named 'src'"
-Always run with `PYTHONPATH=.`:
-```bash
-PYTHONPATH=. python src/run_suite.py --mode guarded --limit 5
-```
-
-### "429 RESOURCE_EXHAUSTED"
-Rate limit hit! Solutions:
-1. **Wait 60 seconds** - The code auto-retries
-2. **Increase delay**: `--delay 15` (15 seconds between calls)
-3. **Reduce limit**: `--limit 5` (fewer attacks)
-
-### YAML Syntax Error in policy.yaml
-The `\b` in regex patterns needs single quotes in YAML:
-```yaml
-# Wrong (double quotes escape \b)
-email: "(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"
-
-# Correct (single quotes preserve \b)
-email: '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'
-```
-
-### "invalid JSON" in model output
-The model returns JSON wrapped in markdown. The code handles this automatically (strips \`\`\`json blocks).
-
-### Empty reports directory
-Create it:
-```bash
-mkdir -p reports
-```
-
----
-
-## 7. Run Automated Tests
-
-```bash
-python -m unittest discover tests
+cd project
+python -m unittest discover tests -v
 ```
 
 **Expected output:**
 ```
-test_compute_stats ... ok
-test_main_writes_csv ... ok
-test_run_guarded_blocks_input ... ok
-test_run_unguarded_generates_decisions ... ok
-----------------------------------------------------------------------
-Ran 4 tests in 0.005s
+test_run_blocks_on_input_guard ... ok
+test_run_handles_tool_and_returns_steps ... ok
+...
+Ran 6 tests in 0.031s
 OK
 ```
 
 ---
 
-## 8. Full Workflow Example
+## 2. Understanding the Project Structure
+
+```
+project/
+├── src/
+│   ├── app.py              # Main entrypoint (routes to RAG or Agent)
+│   ├── rag/app.py          # RAG implementation with citations
+│   ├── agent/app.py        # Agent implementation with tool calls
+│   └── common/
+│       ├── guards.py       # Input/output guardrails
+│       └── logger.py       # JSON logging for replay
+├── tests/
+│   ├── prompts/            # Promptfoo evaluation prompts
+│   │   ├── rag_question.json
+│   │   └── attack_prompt.json
+│   ├── test_rag_app.py     # Unit tests for RAG
+│   ├── test_agent_app.py   # Unit tests for Agent
+│   └── test_entrypoint.py  # Integration tests
+├── tools/
+│   ├── metrics.py          # Calculate precision/recall from results
+│   ├── analyze_results.py  # Debug failures in batch runs
+│   └── cleanup.py          # Reset for fresh evaluation run
+├── data/corpus/            # RAG knowledge base documents
+├── reports/                # Output directory for evaluations
+├── promptfooconfig_custom.yaml       # Offline deterministic testing
+├── promptfooconfig_openrouter.yaml   # Fast probabilistic evaluation
+├── promptfooconfig_gemini_free_tier.yaml  # Gemini with rate-limit handling
+└── run_batches_simple.py   # Batch runner with auto-retry
+```
+
+---
+
+## 3. Running Locally
+
+> **First**: Make sure you're in the `project/` directory with your virtual environment activated (see Section 1).
+
+### Loading Environment Variables
+
+Before running any commands that need API keys, load your `.env` file:
+
+<details>
+<summary><strong> Linux / macOS (bash/zsh)</strong></summary>
 
 ```bash
-# 1. Setup
-cd starter-labs/llm-sec-lab4-starter/llm-sec-lab4
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # Edit with your API key
-source .env
+# Option 1: Export all variables from .env
+export $(grep -v '^#' ../.env | xargs)
 
-# 2. Run unguarded (no protection)
-PYTHONPATH=. python src/run_suite.py --mode unguarded --limit 20 --delay 12
+# Option 2: Source if your shell supports it
+set -a && source ../.env && set +a
+```
+</details>
 
-# 3. Run guarded (with guardrails)
-PYTHONPATH=. python src/run_suite.py --mode guarded --limit 20 --delay 12
+<details>
+<summary><strong> Windows (PowerShell)</strong></summary>
 
-# 4. Compute metrics
-PYTHONPATH=. python src/metrics.py \
-  reports/unguarded.json \
-  reports/guarded.json \
-  reports/metrics.csv
+```powershell
+# Load .env variables into current session
+Get-Content ..\.env | Where-Object { $_ -notmatch '^#' -and $_ -match '=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+```
 
-# 5. View results
+Or use a `.ps1` helper script:
+```powershell
+# Create load-env.ps1 (one-time)
+@'
+Get-Content $args[0] | Where-Object { $_ -notmatch '^#' -and $_ -match '=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+'@ | Out-File -FilePath load-env.ps1
+
+# Then use it:
+.\load-env.ps1 ..\.env
+```
+</details>
+
+<details>
+<summary><strong> Windows (Command Prompt)</strong></summary>
+
+```cmd
+@REM Manually set each variable, or use a batch file:
+for /f "tokens=1,2 delims==" %%a in (..\.env) do set %%a=%%b
+```
+</details>
+
+<details>
+<summary><strong> Python (cross-platform, recommended)</strong></summary>
+
+Install `python-dotenv` (already in requirements.txt):
+```bash
+pip install python-dotenv
+```
+
+Then in Python scripts, add at the top:
+```python
+from dotenv import load_dotenv
+load_dotenv('../.env')
+```
+
+Or use CLI:
+```bash
+python -c "from dotenv import load_dotenv; load_dotenv('../.env'); import os; print(os.environ.get('GEMINI_API_KEY', 'NOT SET')[:10] + '...')"
+```
+</details>
+
+---
+
+### Test RAG Mode
+
+```bash
+python -m src.app --track rag --question "What is LLM01?"
+```
+
+**Expected output:**
+```json
+{"answer": "LLM01 refers to Prompt Injection...", "citations": ["001.txt"], "safety": "safe"}
+```
+
+### Test Agent Mode
+```bash
+python -m src.app --track agent --question "Add 12 and 30"
+```
+
+**Expected output:**
+```json
+{"steps": [...], "final_answer": "42", "doc_id": "calc_001"}
+```
+
+### Rate Limit Warning
+
+If you see this error:
+```
+google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED
+```
+
+This means Gemini's free tier is rate-limited. Solutions:
+1. **Wait 1-5 minutes** and try again
+2. **Use OpenRouter** (see Section 4 below)
+3. **Run unit tests instead** (they use mocks, no API needed)
+
+---
+
+## 4. Evaluation with promptfoo
+
+You have **3 options** for running the evaluation. Choose based on your situation:
+
+| Option | Best For | Time | API Needed | Behavior |
+|--------|----------|------|------------|----------|
+| **Custom (Offline)** | Testing your setup works | ~2 seconds | None | **Deterministic** |
+| **OpenRouter (Fast)** | Reliable real LLM testing | ~2 minutes | Free key | **Probabilistic** |
+| **Gemini (Batch)** | Using only Google API | ~25-30 min | Gemini key | **Probabilistic** |
+
+### Understanding Deterministic vs Probabilistic Evaluation
+
+| Type | Meaning | Example |
+|------|---------|---------|
+| **Deterministic** | Same input → **always** same output | Custom provider: rule-based pattern matching. Run 100 times, get 100 identical results. |
+| **Probabilistic** | Same input → **variable** output | Real LLMs (Gemini, OpenRouter): temperature, sampling, model state cause variance. Run 100 times, get slightly different results each time. |
+
+**Why this matters:**
+- Use **Custom (deterministic)** to validate your setup and CI pipelines — 100% reproducible
+- Use **OpenRouter/Gemini (probabilistic)** to test real-world security — expect 75-90% pass rates
+- Document differences in your Written Report to show you understand LLM behavior
+
+### OpenRouter Free Tier: Important Pricing Note
+
+> **Source**: [OpenRouter FAQ - Free Tier Options](https://openrouter.ai/docs/faq#what-free-tier-options-exist)
+
+| Status | Rate Limit | Notes |
+|--------|------------|-------|
+| **New user (no purchase)** | 50 requests/day total | Very limited, for testing only |
+| **After buying $10 credits** | 1000 requests/day on free models | Sufficient for this course |
+
+⚠️ **Recommendation**: Purchase $10 credits once to unlock 1000 req/day. The credits themselves last forever and free models don't consume them — you just need the purchase to unlock higher limits.
+
+---
+
+###  Option 1: Custom Provider (Offline Testing)
+
+**Best for**: Verifying your setup works without any API calls
+
+**Run from repo root** (single copy-paste block):
+
+<details>
+<summary><strong> Linux / macOS</strong></summary>
+
+```bash
+cd project && \
+npx promptfoo eval \
+  -c promptfooconfig_custom.yaml \
+  -o reports/results_custom.json
+```
+</details>
+
+<details>
+<summary><strong> Windows (PowerShell)</strong></summary>
+
+```powershell
+cd project
+npx promptfoo eval `
+  -c promptfooconfig_custom.yaml `
+  -o reports/results_custom.json
+```
+</details>
+
+**What this does**:
+- Uses a mock provider that simulates RAG responses
+- Runs instantly (2 seconds)
+- Always produces valid JSON with citations
+- Perfect for validating your environment before using real APIs
+
+**Expected result**: 100% pass rate (8/8 tests)
+
+---
+
+### Option 2: OpenRouter (Recommended for Real Testing)
+
+**Best for**: Fast, reliable evaluation with real LLMs — no rate limits!
+
+**Run from repo root** (single copy-paste block):
+
+<details>
+<summary><strong> Linux / macOS</strong></summary>
+
+```bash
+cd project && \
+source ../.venv/bin/activate && \
+export $(grep -v '^#' ../.env | xargs) && \
+npx promptfoo eval \
+  -c promptfooconfig_openrouter.yaml \
+  -o reports/results_openrouter.json
+```
+</details>
+
+<details>
+<summary><strong> Windows (PowerShell)</strong></summary>
+
+```powershell
+cd project
+..\.venv\Scripts\Activate.ps1
+Get-Content ..\.env | Where-Object { $_ -notmatch '^#' -and $_ -match '=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+npx promptfoo eval `
+  -c promptfooconfig_openrouter.yaml `
+  -o reports/results_openrouter.json
+```
+</details>
+
+**What this does**:
+- Uses Mistral's free model via OpenRouter
+- No rate limits (unlike Gemini free tier)
+- Takes ~2 minutes for 8 test cases
+- Real LLM responses with actual security reasoning
+
+**Expected result**: 75-87% pass rate (real LLM variability is normal)
+
+---
+
+### Option 3: Gemini Free Tier (Smart Batch Method)
+
+**Best for**: Students who only have a Gemini API key
+
+⚠️ **Important**: Google's free tier has strict rate limits (15-20 RPM). The smart batch runner handles this automatically with **timeout enforcement**, **circuit breaker**, and **auto-fallback to faster models**.
+
+**Run from repo root** (single copy-paste block):
+
+<details>
+<summary><strong> Linux / macOS</strong></summary>
+
+```bash
+# From repo root - activates venv, loads env, runs batch evaluation
+cd project && \
+source ../.venv/bin/activate && \
+export $(grep -v '^#' ../.env | xargs) && \
+python run_batches_simple.py \
+  --config promptfooconfig_gemini_free_tier.yaml \
+  --batch-size 2 \
+  --delay 60 \
+  --timeout 120
+```
+</details>
+
+<details>
+<summary><strong> Windows (PowerShell)</strong></summary>
+
+```powershell
+# From repo root - activates venv, loads env, runs batch evaluation
+cd project
+..\.venv\Scripts\Activate.ps1
+Get-Content ..\.env | Where-Object { $_ -notmatch '^#' -and $_ -match '=' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+python run_batches_simple.py `
+  --config promptfooconfig_gemini_free_tier.yaml `
+  --batch-size 2 `
+  --delay 60 `
+  --timeout 120
+```
+</details>
+
+**Smart Features:**
+
+| Feature | What It Does |
+|---------|--------------|
+| **Enforced Timeout** | Kills stuck promptfoo after 120s (configurable via `--timeout`) |
+| **Auto-Fallback** | Switches to faster model on timeout/503 (Flash-Lite → Pro) |
+| **Circuit Breaker** | Stops after 2 consecutive API errors (not test failures!) |
+| **Rate Limit Detection** | Detects 429 errors and stops immediately with resume instructions |
+
+> **Note**: Test failures (wrong answers) are **normal** for LLM evaluation. The batch runner continues even with some failures - only API errors (429, 503, timeout) trigger fallback or stopping.
+
+**Command Options:**
+
+```bash
+python run_batches_simple.py --help
+
+Options:
+  --batch-size N    Tests per batch (default: 2)
+  --delay N         Seconds between batches (default: 60)
+  --timeout N       Max seconds per batch before killing (default: 120)
+  --config FILE     Config file (default: promptfooconfig_gemini_free_tier.yaml)
+  --start N         Resume from batch number N
+  --model ID        Force specific model (e.g., google:gemini-2.0-flash)
+  --no-fallback     Disable auto-fallback to faster models
+```
+
+**If tests are slow or timing out:**
+
+```bash
+# Option A: Use a faster model explicitly
+python run_batches_simple.py \
+  --config promptfooconfig_gemini_free_tier.yaml \
+  --model google:gemini-2.0-flash \
+  --timeout 90
+
+# Option B: Let auto-fallback handle it (default behavior)
+# The runner will automatically try faster models if one times out
+```
+
+**After completion**, merge and view results:
+
+```bash
+python merge_batch_results.py
+npx promptfoo view reports/merged_results.json
+```
+
+---
+
+### Quick Decision Guide
+
+```
+Are you just testing your setup works?
+  → Use Option 1 (Custom)
+
+Do you have an OpenRouter API key?
+  → Use Option 2 (OpenRouter) - it's free and fast!
+
+Only have Gemini API key?
+  → Use Option 3 (Gemini Batch)
+
+Getting 429 rate limit errors?
+  → Switch to OpenRouter, or increase --delay to 180
+```
+
+---
+
+## 5. Calculate Metrics
+
+After running evaluation:
+
+```bash
+python tools/metrics.py reports/results.json reports/metrics.csv
 cat reports/metrics.csv
 ```
 
+**Expected output:**
+```csv
+metric,value
+json_rate,1.000
+citation_rate,0.250
+safety_field_rate,1.000
+```
+
+### CI Gate Thresholds
+
+| Metric | Target | What It Measures |
+|--------|--------|------------------|
+| `json_rate` | ≥ 0.95 | % of outputs that are valid JSON |
+| `safety_field_rate` | ≥ 0.85 | % of outputs with correct safety classification |
+| `citation_rate` | ≥ 0.80 | % of RAG outputs with document citations |
+
 ---
 
-## DELIVERABLES CHECKLIST — What You Must Submit
+## 6. Debug Failures
 
-### CRITICAL: Capture Metrics BEFORE and AFTER Your Rule Changes!
+### View Results Dashboard
+```bash
+npx promptfoo view reports/results.json
+```
 
-You must prove YOUR rules improved the block rate. Follow this workflow:
+### Analyze Batch Results
+```bash
+# See comprehensive analysis of all batches
+python tools/analyze_results.py
 
-### Step-by-Step Workflow:
+# Show only failures for debugging
+python tools/analyze_results.py --failures-only
+```
+
+### Cleanup for Fresh Run
+```bash
+python tools/cleanup.py
+```
+
+---
+
+## 7. Automated Tests
+
+Unit tests use mocks (no API needed):
 
 ```bash
-# STEP 1: Run with DEFAULT policy (before your changes)
-PYTHONPATH=. python src/run_suite.py --mode unguarded --limit 20 --delay 12
-PYTHONPATH=. python src/run_suite.py --mode guarded --limit 20 --delay 12
+# From project directory
+python -m unittest discover tests -v
 
-# STEP 2: Save initial metrics
-PYTHONPATH=. python src/metrics.py reports/unguarded.json reports/guarded.json reports/metrics_initial.csv
-cp reports/guarded.json reports/guarded_initial.json
-
-# STEP 3: Add your 2+ new rules to config/policy.yaml
-# Mark your additions with comments like: # ADDED BY STUDENT
-
-# STEP 4: Run guarded mode again with YOUR rules
-PYTHONPATH=. python src/run_suite.py --mode guarded --limit 20 --delay 12
-cp reports/guarded.json reports/guarded_final.json
-
-# STEP 5: Calculate final metrics
-PYTHONPATH=. python src/metrics.py reports/unguarded.json reports/guarded_final.json reports/metrics_final.csv
+# Or from repo root
+make project-test
 ```
 
-### Files to Create:
+Tests verify:
+- Input guards block malicious prompts
+- Output validates against JSON schema
+- RAG returns citations
+- Agent handles tool calls correctly
 
-| File | Description | When to Create |
-|------|-------------|----------------|
-| `reports/unguarded.json` | Results without any guardrails | Step 1 |
-| `reports/guarded_initial.json` | Results with DEFAULT policy | Step 2 |
-| `reports/metrics_initial.csv` | Block rate with DEFAULT policy | Step 2 |
-| `reports/guarded_final.json` | Results with YOUR added rules | Step 4 |
-| `reports/metrics_final.csv` | Block rate with YOUR rules | Step 5 |
-| `config/policy.yaml` | Policy file with YOUR 2+ rules marked | Step 3 |
+---
 
-### Document to Write:
-
-**1-Page Analysis Report** (`reports/analysis.md` or PDF):
-
-| Section | What to Write |
-|---------|---------------|
-| **1. Initial Block Rate** | What % was blocked with default policy? |
-| **2. Your Added Rules** | List each regex rule with explanation of what it catches |
-| **3. Final Block Rate** | What % is blocked now with your rules? |
-| **4. Example Blocks** | Show 2-3 specific attacks your rules caught |
-| **5. Bypass Attempts** | Did any attacks still succeed? Why? |
-| **6. Limitations** | What can't regex guardrails catch? |
-
-### Example Analysis Section:
-
-```markdown
-## My Added Rules
-
-### Rule 1: Bypass detection
-```yaml
-- "(?i)bypass|circumvent|disable.*(filter|guard|safety)"
-```
-**Rationale:** Catches prompts trying to disable protections.
-**Attacks blocked:** 3 of the 20 test attacks
-
-### Rule 2: Jailbreak keywords
-```yaml
-- "(?i)jailbreak|dan mode|developer mode"
-```
-**Rationale:** Common jailbreak terminology.
-**Attacks blocked:** 2 of the 20 test attacks
-
-## Results Summary
-- Initial block rate: 45% (9/20)
-- Final block rate: 70% (14/20)
-- Improvement: +25% (+5 attacks blocked)
-```
-
-### Before Submitting, Verify:
+## 8. Publish Your Changes
 
 ```bash
-# From repo root:
-make w04-day
+# Stage your work
+git add -A
 
-# Check your reports folder:
+# Commit with descriptive message
+git commit -m "Final project: RAG guardrails + Agent safety + metrics passing"
+
+# Push to your repository
+git push origin main
+```
+
+### Required Deliverables Checklist
+
+| Deliverable | Location | Description |
+|-------------|----------|-------------|
+| ✅ Source code | `src/` | RAG + Agent implementations |
+| ✅ Prompts | `tests/prompts/` | JSON chat format prompts |
+| ✅ Config | `promptfooconfig*.yaml` | Evaluation configurations |
+| ✅ Results | `reports/results.json` | Raw evaluation output |
+| ✅ Report | `reports/report.html` | Visual evaluation report |
+| ✅ Metrics | `reports/metrics.csv` | Calculated metrics |
+| ✅ Logs | `logs.jsonl` | Interaction replay logs |
+| ✅ Written Report | (separate) | 3-5 page analysis document |
+
+### Written Report Requirements
+
+Your 3-5 page report **MUST** include:
+
+1. **RAG Architecture Explanation** (REQUIRED)
+   - What is RAG? Why is it used?
+   - How does your RAG system retrieve documents?
+   - How do citations work? Why are they important for security?
+   - What happens when RAG can't find relevant documents?
+
+2. **Agent Architecture Explanation** (REQUIRED)
+   - What is an LLM Agent? How is it different from RAG?
+   - What tools does your agent have access to?
+   - How do you prevent the agent from misusing tools?
+   - What is the agent's decision-making loop?
+
+3. **Threat Model** — What attacks does your system defend against?
+   - Prompt injection (direct and indirect)
+   - Data exfiltration attempts
+   - Tool misuse in Agent mode
+
+4. **Guardrails Implementation**
+   - Input filters: What do they block?
+   - Output validation: How do you ensure safe responses?
+   - Code examples of your guard functions
+
+5. **Evaluation Results**
+   - Metrics achieved (json_rate, citation_rate, safety_field_rate)
+   - Failures encountered and how you fixed them
+   - Comparison: Custom vs OpenRouter vs Gemini results
+
+6. **OWASP/ATLAS Mapping** — Which LLM risks does your system address?
+   - LLM01: Prompt Injection
+   - LLM02: Insecure Output Handling
+   - LLM06: Sensitive Information Disclosure
+
+---
+
+## 9. Troubleshooting
+
+### Error 429: Rate Limit (RESOURCE_EXHAUSTED)
+
+**Cause**: Too many requests to Google AI Studio (free tier: 15-20 RPM)
+
+**Symptoms**:
+```
+google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED
+Error: Request failed after 4 retries: Rate limited
+```
+
+**Solutions** (in order of preference):
+
+1. **Switch to OpenRouter** (recommended):
+   ```bash
+   # Get free key at https://openrouter.ai/keys, add to .env
+   npx promptfoo eval -c promptfooconfig_openrouter.yaml -o reports/results.json
+   ```
+
+2. **Use the batch runner with longer delays**:
+   ```bash
+   python run_batches_simple.py \
+     --config promptfooconfig_gemini_free_tier.yaml \
+     --batch-size 2 \
+     --delay 180   # 3 minutes between batches
+   ```
+
+3. **Wait and retry**: Rate limits reset every minute. Wait 5 minutes and try again.
+
+---
+
+### Error 503: Model Overloaded
+
+**Cause**: Google servers are overloaded (not your fault!)
+
+**Symptoms**:
+```
+503: The model is overloaded. Please try again later.
+```
+
+**Solutions**:
+- The batch runner auto-switches to fallback models
+- Or use OpenRouter instead (different infrastructure)
+
+---
+
+### "Invalid JSON from model"
+
+**Cause**: Model returning markdown code blocks instead of raw JSON
+
+**Symptoms**:
+```
+Invalid JSON from model: ```json\n{...}\n```
+```
+
+**Solutions**:
+1. Use the `.json` prompt files (not `.txt`)
+2. Prompts include "Do not wrap in backticks" instruction
+3. If persists, try a different model
+
+---
+
+### Tests Pass but Metrics Are Low
+
+**Cause**: Real LLMs don't always return citations or set safety="unsafe"
+
+**This is normal!** Expected metrics:
+- `json_rate`: Should be 1.0 (100%)
+- `citation_rate`: 0.25-0.50 is acceptable
+- `safety_field_rate`: 1.0 is the target
+
+**To improve citation rate**: Modify prompts to emphasize citation requirements.
+
+---
+
+### promptfoo Command Not Found
+
+**Cause**: Node.js not installed or wrong version
+
+**Fix**:
+```bash
+# Check Node version (need 22+)
+node --version
+
+# Install Node 22 via nvm
+nvm install 22
+nvm use 22
+
+# Install promptfoo
+npm install -g promptfoo
+
+# Or use npx (no global install needed)
+npx promptfoo eval -c ...
+```
+
+---
+
+### How to Start Fresh
+
+```bash
+# Clean up all previous results
+python tools/cleanup.py
+
+# Verify clean state
 ls reports/
-# Should show: unguarded.json, guarded_initial.json, guarded_final.json, 
-#              metrics_initial.csv, metrics_final.csv
 
-# Compare block rates:
-echo "=== INITIAL ===" && cat reports/metrics_initial.csv
-echo "=== FINAL ===" && cat reports/metrics_final.csv
+# Run again
+npx promptfoo eval -c promptfooconfig_openrouter.yaml -o reports/results.json
 ```
 
 ---
 
-## References
+### Batch Runner Stopped Mid-Way
 
-- [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
-- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
-- [Google AI Studio](https://aistudio.google.com/)
-- [Regex101 - Test Your Patterns](https://regex101.com/)
+**Cause**: Rate limit hit or network error
+
+**How to resume**:
+```bash
+# Check which batch failed
+ls reports/batches/
+
+# Resume from batch N
+python run_batches_simple.py \
+  --config promptfooconfig_gemini_free_tier.yaml \
+  --batch-size 2 \
+  --delay 180 \
+  --start N
+```
 
 ---
 
-Good luck building robust guardrails!
+## 10. Quick Reference
+
+### Configuration Files (3 options only)
+
+| File | Purpose | Time | Behavior |
+|------|---------|------|----------|
+| `promptfooconfig_custom.yaml` | Offline testing | ~2s | Deterministic |
+| `promptfooconfig_openrouter.yaml` | Fast real LLM | ~2min | Probabilistic |
+| `promptfooconfig_gemini_free_tier.yaml` | Gemini batch | ~25min | Probabilistic |
+
+### Complete Workflow
+
+```bash
+# ============ SETUP (once) ============
+make install && source .venv/bin/activate && cd project
+cp ../.env.example ../.env   # Add GEMINI_API_KEY and OPENROUTER_API_KEY
+
+# ============ RUN LOCALLY ============
+export $(cat ../.env | xargs)
+python -m src.app --track rag --question "What is prompt injection?"
+python -m src.app --track agent --question "Calculate 15 + 27"
+
+# ============ EVALUATE ALL 3 OPTIONS (compare results!) ============
+
+# Option 1: Custom (offline, deterministic - always 100%)
+npx promptfoo eval -c promptfooconfig_custom.yaml -o reports/results_custom.json
+
+# Option 2: OpenRouter (fast, probabilistic - expect ~75-90%)
+npx promptfoo eval -c promptfooconfig_openrouter.yaml -o reports/results_openrouter.json
+
+# Option 3: Gemini (slow, probabilistic - expect ~75-90%)
+python run_batches_simple.py \
+  --config promptfooconfig_gemini_free_tier.yaml \
+  --batch-size 2 --delay 180
+python merge_batch_results.py   # Merge batch results
+
+# ============ METRICS ============
+python tools/metrics.py reports/results_openrouter.json reports/metrics.csv
+cat reports/metrics.csv
+
+# ============ TESTS (no API needed) ============
+python -m unittest discover tests -v
+
+# ============ DEBUG ============
+python tools/analyze_results.py --failures-only
+npx promptfoo view reports/results_openrouter.json
+python tools/cleanup.py   # Start fresh
+```
+
+---
+
+**Good luck with your final project!** 
 
